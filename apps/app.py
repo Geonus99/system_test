@@ -1,4 +1,5 @@
 from pathlib import Path
+from apps.config import config
 from flask import Flask
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
@@ -8,19 +9,21 @@ from flask_wtf.csrf import CSRFProtect
 db = SQLAlchemy()
 csrf = CSRFProtect()
 
-def create_app():
+def create_app(config_key):
     # 플라스크 인스턴스 생성
     app = Flask(__name__)
-    # 앱의 config 설정을 한다.
-    app.config.from_mapping(
-        SECRET_KEY="flaskbooktest",
-        SQLALCHEMY_DATABASE_URI=f"sqlite:///{Path(__file__).parent.parent / 'local.sqlite'}",
-        SQLALCHEMY_TRACK_MODIFICATIONS=False,
 
-    # SQL을 콘솔 로그에 출력하는 설정
-        SQLALCHEMY_ECHO=True,
-        WTF_CSRF_SECRET_KEY="AuwzyszU5sugKN7KZs6f"
-    )
+    app.config.from_object(config[config_key])
+    # 앱의 config 설정을 한다. 138p 제거
+    # app.config.from_mapping(
+    #     SECRET_KEY="flaskbooktest",
+    #     SQLALCHEMY_DATABASE_URI=f"sqlite:///{Path(__file__).parent.parent / 'local.sqlite'}",
+    #     SQLALCHEMY_TRACK_MODIFICATIONS=False,
+
+    # # SQL을 콘솔 로그에 출력하는 설정
+    #     SQLALCHEMY_ECHO=True,
+    #     WTF_CSRF_SECRET_KEY="AuwzyszU5sugKN7KZs6f"
+    # )
 
     csrf.init_app(app)
     # SQLAlchmey와 앱을 연계한다

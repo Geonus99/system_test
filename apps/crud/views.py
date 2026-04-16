@@ -44,3 +44,35 @@ def create_user():
         # 사용자의 일람 화면으로 리다이렉트한다
         return redirect(url_for("crud.users"))
     return render_template("crud/create.html", form=form)
+
+@crud.route("/users")
+def users():
+    """사용자의 일람을 취득한다"""
+    user = User.query.all()
+    return render_template("crud/index.html",users=user)
+
+@crud.route("/users/<int:user_id>", methods=["GET","POST"])
+def edit_user(user_id):
+    form = UserForm()
+
+    # User 모델을 이용하여 사용자를 취득한다
+    user = User.query.filter_by(id=user_id).first()
+
+    # form으로부터 제출된 경우는 사용자를  갱신하여 사용자의 일람 화면으로 리다에릭트한다.
+    if form.validate_on_submit():
+        user.username = form.username.data
+        user.email = form.email.data
+        user.password = form.password.data
+        db.session.add(user)
+        db.session.commit()
+        return redirect(url_for("crud.users"))
+    
+    # GET의 경우는 HTML을 반환한다.
+    return render_template("crud/edit.html", user=user, form=form)
+
+@crud.route("/users/<int:user_id>/delete", methods=["POST"])
+def delete_user(user_id):
+    user=User.query.filter_by(id=user_id).first()
+    db.session.delete(user)
+    db.session.commit()
+    return redirect(url_for("crud.users"))

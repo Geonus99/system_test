@@ -1,0 +1,48 @@
+<!-- p134에서 제외 상속처리 함<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('crud.static', filename='style.css') }}" />
+    <title>CRUD</title>
+</head>
+<body> -->
+{% extends 'crud/base.html' %}
+{% block title %}사용자 수정{% endblock %}
+{% block content %}
+<body>
+    <h2>사용자 편집</h2>
+    <form action="{{ url_for('crud.edit_user', user_id=user.id) }}" method="POST" novalidate="novalidate">
+        {{ form.csrf_token }}
+        <p>
+            {{ form.username.label }} {{ form.username(placeholder="사용자명",
+            value=user.username) }}
+        </p>
+        {% for error in form.username.errors %}
+        <span style="color: red;">{{ error }}</span>
+        {% endfor %}
+        <p>
+            {{ form.email.label }} {{ form.email(placeholder="메일 주소",
+            value=user.email) }}
+        </p>
+        {% for error in form.email.errors %}
+        <span style="color: red;">{{ error }}</span>
+        {% endfor %}
+        <p>
+            {{ form.password.label }} {{ form.password(placeholder="비밀번호") }}
+        </p>
+        {% for error in form.password.errors %}
+        <span style="color: red;">{{ error }}</span>
+        {% endfor %}
+        <p><input type="submit" value="갱신" /></p>
+    </form>    
+    
+    <!-- 사용자 삭제 폼 만들기 p132 -->
+    <form action="{{ url_for('crud.delete_user', user_id=user.id) }}" method="POST">
+    {{ form.csrf_token }}
+    <input type="submit" value="삭제">
+</form>
+
+{% endblock %}    
+<!-- p 134 상속처리 함</body>
+</html> -->

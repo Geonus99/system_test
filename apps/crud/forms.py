@@ -8,7 +8,7 @@ class UserForm(FlaskForm):
     username = StringField(
         "사용자명",
         validators=[
-            DataRequired(message="사용자명은 필수입니다, "),
+            DataRequired(message="사용자명은 필수입니다. "),
             Length(max=30, message="30문자 이내로 입력해 주세요. "),
         ],
     )
