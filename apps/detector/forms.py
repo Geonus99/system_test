@@ -9,3 +9,9 @@ class UploadImageForm(FlaskForm):
                     FileAllowed(["png","jpg","jpeg"], "지원되지 않는 이미지 형식입니다."),]
     )
     submit = SubmitField("업로드")
+
+class DetectorForm(FlaskForm):
+    submit = SubmitField("감지")
+
+class DeleteForm(FlaskForm):
+    submit = SubmitField("삭제")

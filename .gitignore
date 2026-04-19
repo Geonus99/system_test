@@ -281,3 +281,22 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/python,flask,visualstudiocode
 
 .flaskenv
+local.sqlite
+
+# Database
+local.sqlite
+
+# AI Model
+apps/detector/model.pt
+
+# Uploaded Images (결과물 저장 폴더)
+apps/images/*.jpg
+apps/images/*.png
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual Environment
+venv/
+.venv/
