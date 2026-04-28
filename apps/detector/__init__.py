@@ -1,1 +1,1 @@
-import apps.detector.models
+

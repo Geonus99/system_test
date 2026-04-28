@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from apps.app import db
+from apps.extensions import db
 
 class UserImage(db.Model):
     __tablename__ = "user_images"

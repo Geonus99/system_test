@@ -1,80 +1,149 @@
+import eventlet
+eventlet.monkey_patch()
 from pathlib import Path
-from flask_login import LoginManager
-from apps.config import config
-from flask import Flask, render_template
+import os
+from dotenv import load_dotenv
+from flask import Flask, render_template, jsonify, request
 from flask_migrate import Migrate
-from flask_sqlalchemy import SQLAlchemy
-from flask_wtf.csrf import CSRFProtect
+from flask_socketio import SocketIO
 
 
-db = SQLAlchemy()
-csrf = CSRFProtect()
+# 확장 도구들 임포트 (기존 경로 유지)
+from apps.config import config
+from apps.extensions import db, csrf, login_manager, socketio 
+from apps.detector.AiStreamService import AiStreamService
+from apps.detector.WebcamService import WebcamService
+from apps.detector.UsbCamService import UsbCamService
 
-# Login_Manager를 인스턴스화한다.
-login_manager = LoginManager()
-# login_view 속성에 미로그인 시 리다이렉트하는 엔드포인트를 지정한다
-login_manager.login_view = "auth.signup"
-# login_message 속성에 로그인 후에 표시할 메세지를 지정한다
-# 여기에서는 아무것도 표시하지 않도록 공백을 지정한다
-login_manager.login_message=""
+load_dotenv()
 
+# 전역 변수 설정
+_usbcam_task_started = False
+_cam_tasks = {}
 
 def create_app(config_key="local"):
-    # 플라스크 인스턴스 생성
     app = Flask(__name__)
-
+    
+    # 1. 설정 로드
     app.config.from_object(config[config_key])
-    # 앱의 config 설정을 한다. 138p 제거
-    # app.config.from_mapping(
-    #     SECRET_KEY="flaskbooktest",
-    #     SQLALCHEMY_DATABASE_URI=f"sqlite:///{Path(__file__).parent.parent / 'local.sqlite'}",
-    #     SQLALCHEMY_TRACK_MODIFICATIONS=False,
 
-    # # SQL을 콘솔 로그에 출력하는 설정
-    #     SQLALCHEMY_ECHO=True,
-    #     WTF_CSRF_SECRET_KEY="AuwzyszU5sugKN7KZs6f"
-    # )
+    # 2. SocketIO 초기화 (중복 제거 및 eventlet 고정)
+    # 반드시 가상환경에 pip install eventlet 이 되어 있어야 합니다.
+    socketio.init_app(
+        app,
+        cors_allowed_origins="*",
+        async_mode='eventlet', 
+        logger=False,
+        engineio_logger=False
+    )
 
-    # 커스텀 오류 화면을 등록한다
+    # 3. 기타 확장 도구 초기화
+    csrf.init_app(app)
+    db.init_app(app)
+    Migrate(app, db)
+    login_manager.init_app(app)
+    login_manager.login_view = "auth.signup"
+    login_manager.login_message = ""
+
+    # 4. 에러 핸들러
     app.register_error_handler(404, page_not_found)
     app.register_error_handler(500, internal_server_error)
 
-    csrf.init_app(app)
-    # SQLAlchmey와 앱을 연계한다
-    db.init_app(app)
-    # Migrate와 앱을 연계한다
-    Migrate(app, db)
-    # login_manager를 애플리케이션과 연계한다.
-    login_manager.init_app(app)
-
-    # 🚨 이 한 줄이 핵심입니다! 모델을 불러와야 Migrate가 인식해요.
-    from apps.crud import models as crud_models
-
+    # 5. 블루프린트 등록
     from apps.crud import views as crud_views
-
-    # register_blueprint를 사용해 views의 crud를 앱에 등록한다
     app.register_blueprint(crud_views.crud, url_prefix="/crud")
-
-    # 이제부터 작성하는 auth 패키지로부터 views를 import한다
     from apps.auth import views as auth_views
-
-    # register_blueprint를 사용해 views의 auth를 앱에 등록한다
     app.register_blueprint(auth_views.auth, url_prefix="/auth")
-
-    # 이제부터 작성하는 detector 패키지로부터 views를 import한다
     from apps.detector import views as dt_views
-
-    # register_blueprint를 사용해 views의 dt를 앱에 등록한다
     app.register_blueprint(dt_views.dt)
+
+    # 6. HTTP 라우트
+    @app.route('/ai-detect/aistream')
+    def ai_stream():
+        return render_template('detector/ai_stream.html')
+
+    @app.route('/ai-detect/apistream')
+    def api_stream():
+        return render_template('detector/api_stream.html')
+
+    @app.route('/ai-detect/api/cctv/list')
+    def cctv_list():
+        from apps.detector.Apiservice import ITSApiService
+        api_key = app.config.get("ITS_API_KEY", "")
+        service = ITSApiService(api_key)
+        try:
+            cctvs = service.get_cctv_list(
+                type=request.args.get("type", "ex"),
+                min_x=float(request.args.get("min_x", 126.7)),
+                min_y=float(request.args.get("min_y", 37.4)),
+                max_x=float(request.args.get("max_x", 127.2)),
+                max_y=float(request.args.get("max_y", 37.7))
+            )
+            return jsonify({"ok": True, "count": len(cctvs), "cctvs": cctvs})
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+    # 7. 소켓 이벤트 핸들러 (함수 내부에 작성하여 클로저로 socketio 접근)
+    @socketio.on('connect')
+    def handle_connect():
+        print("[SYSTEM] Client connected")
+
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        print("[SYSTEM] Client disconnected")
+
+    @socketio.on('set_detection_target')
+    def handle_target(data):
+        AiStreamService.set_target(data.get('target', ''))
+
+    @socketio.on('webcam_frame')
+    def handle_webcam_frame(data):
+        result = WebcamService.predict_frame(data['image'])
+        if result:
+            socketio.emit('webcam_result', {'image': result})
+
+    @socketio.on('start_rtsp')
+    def handle_start_rtsp(data):
+        cam_id = data.get('cam_id')
+        if cam_id in _cam_tasks and _cam_tasks[cam_id]:
+            return
+        _cam_tasks[cam_id] = True
+        rtsp_url = os.environ.get(f"RTSP_URL_{cam_id}")
+        socketio.start_background_task(run_cam_logic, cam_id, rtsp_url)
+        print(f"[SYSTEM] CAM {cam_id} 시작")
+
+    @socketio.on('stop_rtsp')
+    def handle_stop_rtsp(data):
+        cam_id = data.get('cam_id')
+        _cam_tasks[cam_id] = False
+        AiStreamService.stop(cam_id)
+        print(f"[SYSTEM] CAM {cam_id} 정지")
+
+    @socketio.on('start_usbcam')
+    def handle_start_usbcam():
+        global _usbcam_task_started
+        if not _usbcam_task_started:
+            _usbcam_task_started = True
+            socketio.start_background_task(UsbCamService.run_usbcam_stream, socketio)
+            print("[SYSTEM] USB 웹캠 시작")
+
+    @socketio.on('stop_usbcam')
+    def handle_stop_usbcam():
+        global _usbcam_task_started
+        _usbcam_task_started = False
+        UsbCamService.stop()
+        print("[SYSTEM] USB 웹캠 정지")
 
     return app
 
-# 등록한 엔드포인트의 함수를 작성하고, 404 오류나 500 오류가 발생했을 때에 지정한 HTML을 반환한다
 def page_not_found(e):
-    """404 Not Found"""
     return render_template("404.html"), 404
 
-
 def internal_server_error(e):
-    """500 Internal Server Error"""
     return render_template("500.html"), 500
+
+def run_cam_logic(cam_id, rtsp_url):
+    # 주의: 여기서 socketio 객체를 사용해야 하므로 전역 socketio를 사용합니다.
+    AiStreamService.run_rtsp_stream(socketio, cam_id, rtsp_url)

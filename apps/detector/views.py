@@ -2,10 +2,19 @@ import random  # p227 추가
 import uuid  # 파일명 랜덤 처리용
 from pathlib import Path  # 파일 경로 처리용
 
+import os
 import cv2  # p227 추가
 import numpy as np  # p227 추가
 import torch  # p227 추가
 import torchvision  # p227 추가
+
+
+from flask import jsonify, request
+from .Apiservice import ITSApiService
+ 
+# 인증키 (config.py 또는 .env 에서 불러오는 방식으로 변경 가능)
+import os
+its_service = None  # 요청 시점에 current_app에서 읽도록
 
 # redirect url_for p211 추가
 from flask import (
@@ -350,3 +359,29 @@ def search():
 @dt.errorhandler(404)
 def page_not_found(e):
     return render_template("detector/404.html"), 404
+
+@dt.route("/apistream")
+def apistream():
+    return render_template("detector/api_stream.html")
+
+@dt.route("/api/cctv/list")
+def cctv_list():
+    global its_service
+    if its_service is None:
+        api_key = current_app.config.get("ITS_API_KEY", "")
+        its_service = ITSApiService(api_key)
+    try:
+        type_  = request.args.get("type", "ex")
+        min_x  = float(request.args.get("min_x", 126.7))
+        min_y  = float(request.args.get("min_y", 37.4))
+        max_x  = float(request.args.get("max_x", 127.2))
+        max_y  = float(request.args.get("max_y", 37.7))
+        limit  = int(request.args.get("limit", 100))
+
+        cctvs = its_service.get_cctv_list(
+            type=type_, min_x=min_x, min_y=min_y,
+            max_x=max_x, max_y=max_y, limit=limit
+        )
+        return jsonify({"ok": True, "count": len(cctvs), "cctvs": cctvs})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500

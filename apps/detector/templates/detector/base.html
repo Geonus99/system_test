@@ -14,7 +14,8 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand " href="{{ url_for('detector.index') }}">detector</a>
-
+            <li><a class="dropdown-item" href="/ai-detect/aistream">,📡 IpCam스트리밍 분석</a></li>
+            <li><a class="dropdown-item" href="/ai-detect/apistream">,📡 API 탐지</a></li>
             <!-- p244 검색 폼을 추가한다. -->
             {% if url_for(request.endpoint) == url_for('detector.index') or
             url_for(request.endpoint) == url_for('detector.search') %}

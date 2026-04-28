@@ -9,6 +9,7 @@
 
 
 from pathlib import Path
+import os
 
 basedir = Path(__file__).parent.parent
 # pathlib.Path는 경로를 객체로 지정할 때 사용한다.
@@ -22,6 +23,7 @@ basedir = Path(__file__).parent.parent
 class BaseConfig:
     SECRET_KEY = "12345678901234567890"
     WTF_CSRF_SECRET_KEY = "09876543210987654321"
+    ITS_API_KEY = os.environ.get("ITS_API_KEY")
 
     # 이미지 업로드용 경로 설정 apps/images를 지정 p207
     UPLOAD_FOLDER = str(Path(basedir, "apps", "images"))

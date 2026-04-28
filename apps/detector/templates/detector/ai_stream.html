@@ -1,0 +1,541 @@
+{% extends 'detector/base.html' %}
+{% block content %}
+
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700&display=swap');
+
+    :root {
+        --bg: #0a0c10;
+        --surface: #111318;
+        --surface2: #1a1d24;
+        --border: #232730;
+        --accent-blue: #3b82f6;
+        --accent-green: #22c55e;
+        --accent-red: #ef4444;
+        --text: #e2e8f0;
+        --text-muted: #64748b;
+        --mono: 'JetBrains Mono', monospace;
+        --sans: 'Syne', sans-serif;
+    }
+
+    body { background: var(--bg); color: var(--text); }
+
+    .monitor-wrap { padding: 24px; font-family: var(--sans); }
+
+    .top-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--border);
+    }
+    .top-bar h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin: 0; }
+    .top-bar h1 span { color: var(--accent-blue); }
+    .sys-time { font-family: var(--mono); font-size: 0.75rem; color: var(--text-muted); }
+
+    .main-grid {
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        gap: 16px;
+    }
+
+    /* 카메라 4개 2x2 그리드 */
+    .cam-grid {
+        display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    }
+
+    .cam-panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface2);
+    }
+    .panel-label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+    .dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        transition: background 0.3s;
+        flex-shrink: 0;
+    }
+    .dot.active-blue { background: var(--accent-blue); box-shadow: 0 0 5px var(--accent-blue); animation: pulse 2s infinite; }
+    .dot.active-green { background: var(--accent-green); box-shadow: 0 0 5px var(--accent-green); animation: pulse 2s infinite; }
+    .dot.error { background: var(--accent-red); }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+    }
+
+    .panel-controls { display: flex; gap: 5px; align-items: center; }
+
+    .ctrl-btn {
+        font-family: var(--mono);
+        font-size: 0.6rem;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 3px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .ctrl-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+    .ctrl-btn.stop:hover { border-color: var(--accent-red); color: var(--accent-red); }
+
+    .status-tag {
+        font-family: var(--mono);
+        font-size: 0.55rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        padding: 2px 6px;
+        border-radius: 3px;
+        text-transform: uppercase;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+    }
+    .status-tag.on { background: rgba(34,197,94,0.1); border-color: var(--accent-green); color: var(--accent-green); }
+    .status-tag.on-blue { background: rgba(59,130,246,0.1); border-color: var(--accent-blue); color: var(--accent-blue); }
+    .status-tag.err { background: rgba(239,68,68,0.1); border-color: var(--accent-red); color: var(--accent-red); }
+
+    .cam-body {
+        position: relative;
+        background: #000;
+        aspect-ratio: 4/3;
+    }
+    .cam-body img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .cam-placeholder {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: var(--text-muted);
+    }
+    .cam-placeholder svg { opacity: 0.15; }
+    .cam-placeholder span { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.05em; }
+    .cam-body img[src=""] + .cam-placeholder,
+    .cam-body img:not([src]) + .cam-placeholder { display: flex; }
+    .cam-body img[src]:not([src=""]) + .cam-placeholder { display: none; }
+
+    /* 사이드 패널 */
+    .side-panel { display: flex; flex-direction: column; gap: 14px; }
+
+    .side-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .side-card-header {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        background: var(--surface2);
+    }
+    .side-card-body { padding: 14px; }
+
+    .target-input-wrap { display: flex; gap: 6px; }
+    .target-input {
+        flex: 1;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 6px 10px;
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--text);
+        outline: none;
+        transition: border-color 0.15s;
+    }
+    .target-input:focus { border-color: var(--accent-blue); }
+    .target-input::placeholder { color: var(--text-muted); }
+
+    .set-btn {
+        padding: 6px 12px;
+        background: var(--accent-red);
+        border: none;
+        border-radius: 4px;
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #fff;
+        cursor: pointer;
+        transition: opacity 0.15s;
+    }
+    .set-btn:hover { opacity: 0.85; }
+
+    .current-target { margin-top: 10px; font-family: var(--mono); font-size: 0.7rem; color: var(--text-muted); }
+    .current-target.active { color: var(--accent-red); }
+
+    .log-header-row { display: flex; align-items: center; justify-content: space-between; }
+    .clear-btn { background: none; border: none; font-family: var(--mono); font-size: 0.6rem; color: var(--text-muted); cursor: pointer; padding: 0; }
+    .clear-btn:hover { color: var(--text); }
+
+    .log-scroll { height: 400px; overflow-y: auto; }
+    .log-scroll::-webkit-scrollbar { width: 4px; }
+    .log-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .log-empty { display: flex; align-items: center; justify-content: center; height: 100%; font-family: var(--mono); font-size: 0.7rem; color: var(--text-muted); }
+
+    .log-item {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        border-left: 2px solid var(--accent-red);
+        animation: slideIn 0.2s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
+    .log-item-time { font-family: var(--mono); font-size: 0.6rem; color: var(--text-muted); margin-bottom: 3px; }
+    .log-item-label { font-family: var(--mono); font-size: 0.75rem; font-weight: 600; color: var(--accent-red); }
+    .log-item-cam { font-family: var(--mono); font-size: 0.6rem; color: var(--text-muted); margin-top: 2px; }
+
+    video { display: none; }
+</style>
+
+<div class="monitor-wrap">
+    <div class="top-bar">
+        <h1>AI <span>Monitor</span> System</h1>
+        <span class="sys-time" id="sysTime">--:--:--</span>
+    </div>
+
+    <div class="main-grid">
+        <div class="cam-grid">
+            <!-- CAM 1 -->
+            <div class="cam-panel">
+                <div class="panel-header">
+                    <div class="panel-label">
+                        <div class="dot" id="dot-1"></div>
+                        CAM 1
+                    </div>
+                    <div class="panel-controls">
+                        <span class="status-tag" id="status-1">대기중</span>
+                        <button class="ctrl-btn" onclick="startRtsp(1)">START</button>
+                        <button class="ctrl-btn stop" onclick="stopRtsp(1)">STOP</button>
+                    </div>
+                </div>
+                <div class="cam-body">
+                    <img id="cam-1" src="">
+                    <div class="cam-placeholder">
+                        <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15.75 10.5l4.72-4.72v12.44l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z"/></svg>
+                        <span>STREAM INACTIVE</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CAM 2 -->
+            <div class="cam-panel">
+                <div class="panel-header">
+                    <div class="panel-label">
+                        <div class="dot" id="dot-2"></div>
+                        CAM 2
+                    </div>
+                    <div class="panel-controls">
+                        <span class="status-tag" id="status-2">대기중</span>
+                        <button class="ctrl-btn" onclick="startRtsp(2)">START</button>
+                        <button class="ctrl-btn stop" onclick="stopRtsp(2)">STOP</button>
+                    </div>
+                </div>
+                <div class="cam-body">
+                    <img id="cam-2" src="">
+                    <div class="cam-placeholder">
+                        <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15.75 10.5l4.72-4.72v12.44l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z"/></svg>
+                        <span>STREAM INACTIVE</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CAM 3 -->
+            <div class="cam-panel">
+                <div class="panel-header">
+                    <div class="panel-label">
+                        <div class="dot" id="dot-3"></div>
+                        CAM 3
+                    </div>
+                    <div class="panel-controls">
+                        <span class="status-tag" id="status-3">대기중</span>
+                        <button class="ctrl-btn" onclick="startRtsp(3)">START</button>
+                        <button class="ctrl-btn stop" onclick="stopRtsp(3)">STOP</button>
+                    </div>
+                </div>
+                <div class="cam-body">
+                    <img id="cam-3" src="">
+                    <div class="cam-placeholder">
+                        <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15.75 10.5l4.72-4.72v12.44l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z"/></svg>
+                        <span>STREAM INACTIVE</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 웹캠 -->
+            <div class="cam-panel">
+                <div class="panel-header">
+                    <div class="panel-label">
+                        <div class="dot" id="webcamDot"></div>
+                        Webcam
+                    </div>
+                    <div class="panel-controls">
+                        <span class="status-tag" id="webcamStatus">대기중</span>
+                        <button class="ctrl-btn" onclick="startWebcam()">START</button>
+                        <button class="ctrl-btn stop" onclick="stopWebcam()">STOP</button>
+                    </div>
+                </div>
+                <div class="cam-body">
+                    <video id="localVideo" autoplay playsinline></video>
+                    <img id="webcamView" src="">
+                    <div class="cam-placeholder">
+                        <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"/></svg>
+                        <span>WEBCAM INACTIVE</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- USB CAM 추가 -->
+        <div class="cam-panel">
+            <div class="panel-header">
+                <div class="panel-label">
+                    <div class="dot" id="usbcamDot"></div>
+                    USB CAM
+                </div>
+                <div class="panel-controls">
+                    <span class="status-tag" id="usbcamStatus">대기중</span>
+                    <button class="ctrl-btn" onclick="startUsbCam()">START</button>
+                    <button class="ctrl-btn stop" onclick="stopUsbCam()">STOP</button>
+                </div>
+            </div>
+            <div class="cam-body">
+                <img id="usbcamView" src="">
+                <div class="cam-placeholder">
+                    <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                        <path d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/>
+                        <path d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"/>
+                    </svg>
+                    <span>USB CAM INACTIVE</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 사이드 패널 -->
+        <div class="side-panel">
+            <div class="side-card">
+                <div class="side-card-header">감시 설정</div>
+                <div class="side-card-body">
+                    <div class="target-input-wrap">
+                        <input type="text" id="targetInput" class="target-input" placeholder="person, laptop...">
+                        <button class="set-btn" onclick="setTarget()">SET</button>
+                    </div>
+                    <div class="current-target" id="currentTarget">TARGET: NONE</div>
+                </div>
+            </div>
+
+            <div class="side-card" style="flex:1;">
+                <div class="side-card-header">
+                    <div class="log-header-row">
+                        <span>Detection Log</span>
+                        <button class="clear-btn" onclick="clearLogs()">CLEAR</button>
+                    </div>
+                </div>
+                <div class="log-scroll" id="alertLog">
+                    <div class="log-empty" id="emptyMsg">NO DETECTIONS</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+    function updateTime() {
+        document.getElementById('sysTime').textContent = new Date().toLocaleTimeString('ko-KR', {hour12: false});
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    const socket = io({ transports: ['websocket'], upgrade: false });
+
+    // ── RTSP ──
+    const rtspActive = {};
+
+    function startRtsp(camId) {
+        if (rtspActive[camId]) return;
+        rtspActive[camId] = true;
+        socket.emit('start_rtsp', { cam_id: camId });
+        document.getElementById(`dot-${camId}`).className = 'dot active-blue';
+        document.getElementById(`status-${camId}`).className = 'status-tag on-blue';
+        document.getElementById(`status-${camId}`).textContent = 'LIVE';
+    }
+
+    function stopRtsp(camId) {
+        rtspActive[camId] = false;
+        socket.emit('stop_rtsp', { cam_id: camId });
+        document.getElementById(`dot-${camId}`).className = 'dot';
+        document.getElementById(`status-${camId}`).className = 'status-tag';
+        document.getElementById(`status-${camId}`).textContent = '대기중';
+        document.getElementById(`cam-${camId}`).src = '';
+    }
+
+    socket.on('ai_frame', function(data) {
+        if (data.image && rtspActive[data.cam_id]) {
+            document.getElementById(`cam-${data.cam_id}`).src = 'data:image/jpeg;base64,' + data.image;
+        }
+    });
+
+    socket.on('stream_error', function(data) {
+        const id = data.cam_id;
+        document.getElementById(`dot-${id}`).className = 'dot error';
+        document.getElementById(`status-${id}`).className = 'status-tag err';
+        document.getElementById(`status-${id}`).textContent = 'ERROR';
+    });
+
+    // ── 웹캠 ──
+    let webcamStream = null;
+    let webcamActive = false;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    async function startWebcam() {
+        if (webcamStream) return;
+        try {
+            webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const video = document.getElementById('localVideo');
+            video.srcObject = webcamStream;
+            webcamActive = true;
+            document.getElementById('webcamDot').className = 'dot active-green';
+            document.getElementById('webcamStatus').className = 'status-tag on';
+            document.getElementById('webcamStatus').textContent = 'LIVE';
+
+            function sendFrame() {
+                if (!webcamActive) return;
+                canvas.width = 640;
+                canvas.height = 480;
+                ctx.drawImage(video, 0, 0, 640, 480);
+                socket.emit('webcam_frame', { image: canvas.toDataURL('image/jpeg', 0.6).split(',')[1] });
+            }
+
+            video.onloadedmetadata = () => sendFrame();
+
+            socket.off('webcam_result');
+            socket.on('webcam_result', function(data) {
+                if (!webcamActive) return;
+                if (data.image) document.getElementById('webcamView').src = 'data:image/jpeg;base64,' + data.image;
+                sendFrame();
+            });
+
+        } catch (err) {
+            alert('웹캠 접근 실패: ' + err.message + '\nlocalhost:5000 으로 접속하세요!');
+        }
+    }
+
+    function stopWebcam() {
+        webcamActive = false;
+        if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
+        socket.off('webcam_result');
+        document.getElementById('webcamDot').className = 'dot';
+        document.getElementById('webcamStatus').className = 'status-tag';
+        document.getElementById('webcamStatus').textContent = '대기중';
+        document.getElementById('webcamView').src = '';
+    }
+
+    // ── 공통 ──
+    function setTarget() {
+        const input = document.getElementById('targetInput');
+        const target = input.value.trim().toLowerCase();
+        if (!target) { alert('감시할 객체명을 입력하세요!'); return; }
+        socket.emit('set_detection_target', { target });
+        const display = document.getElementById('currentTarget');
+        display.textContent = 'TARGET: ' + target.toUpperCase();
+        display.className = 'current-target active';
+        input.value = '';
+    }
+
+    document.getElementById('targetInput').addEventListener('keypress', e => {
+        if (e.key === 'Enter') setTarget();
+    });
+
+    function clearLogs() {
+        document.getElementById('alertLog').innerHTML = '<div class="log-empty" id="emptyMsg">NO DETECTIONS</div>';
+    }
+
+    socket.on('detection_alert', function(data) {
+        const alertLog = document.getElementById('alertLog');
+        const emptyMsg = document.getElementById('emptyMsg');
+        if (emptyMsg) emptyMsg.remove();
+        const item = document.createElement('div');
+        item.className = 'log-item';
+        item.innerHTML = `
+            <div class="log-item-time">${data.time}</div>
+            <div class="log-item-label">⬤ ${data.label.toUpperCase()} 포착됨</div>
+            <div class="log-item-cam">CAM ${data.cam_id}</div>
+        `;
+        alertLog.prepend(item);
+        if (alertLog.children.length > 20) alertLog.removeChild(alertLog.lastChild);
+    });
+
+
+    // ── USB CAM ──
+let usbcamActive = false;
+
+function startUsbCam() {
+    if (usbcamActive) return;
+    usbcamActive = true;
+    socket.emit('start_usbcam');
+    document.getElementById('usbcamDot').className = 'dot active-green';
+    document.getElementById('usbcamStatus').className = 'status-tag on';
+    document.getElementById('usbcamStatus').textContent = 'LIVE';
+}
+
+function stopUsbCam() {
+    usbcamActive = false;
+    socket.emit('stop_usbcam');
+    document.getElementById('usbcamDot').className = 'dot';
+    document.getElementById('usbcamStatus').className = 'status-tag';
+    document.getElementById('usbcamStatus').textContent = '대기중';
+    document.getElementById('usbcamView').src = '';
+}
+
+socket.on('usbcam_result', function(data) {
+    if (data.image && usbcamActive) {
+        document.getElementById('usbcamView').src = 'data:image/jpeg;base64,' + data.image;
+    }
+});
+
+socket.on('usbcam_error', function(data) {
+    document.getElementById('usbcamDot').className = 'dot error';
+    document.getElementById('usbcamStatus').className = 'status-tag err';
+    document.getElementById('usbcamStatus').textContent = 'ERROR';
+    console.error('USB CAM 오류:', data.message);
+});
+    socket.on('connect', () => console.log('소켓 연결됨'));
+    socket.on('disconnect', () => console.log('소켓 끊김'));
+</script>
+
+{% endblock %}
